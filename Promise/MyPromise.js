@@ -66,8 +66,8 @@ class MyPromise {
     return new MyPromise((resolve, reject) => {
       // 兼容 处理then方法两个参数都不传递，手动包裹成一下，后续then，catch也能执行到
       successCb = successCb ? successCb : value => value
-      // failCb = failCb ? failCb : reason => { throw reason } // !!!有问题 catch回调触发不了
-      failCb = failCb ? failCb : reason => { reject(reason) }
+      failCb = failCb ? failCb : reason => { throw reason } // then里面try catch的catch语句里调用this.reject就会导致MyPromise.catch回调触发不了，调用当前的reject就行
+      // failCb = failCb ? failCb : reason => { reject(reason) }
 
       if (this.state === FULLFILLED) {
         try {
@@ -76,7 +76,7 @@ class MyPromise {
           // resolve(x)
           resolvePromise(x, resolve, reject)
         } catch (error) {
-          this.reject(error)
+          reject(error)
         }
         
       } else if (this.state === REJECTED) {
@@ -85,7 +85,7 @@ class MyPromise {
           // reject(x)
           resolvePromise(x, resolve, reject)
         } catch (error) {
-          this.reject(error)
+          reject(error)
         }
       } else {
         // 一般遇到异步的时候，会走到else，也就是当前状态是pending状态，把成功和失败回调暂存起来
@@ -98,7 +98,7 @@ class MyPromise {
             // resolve(x)
             resolvePromise(x, resolve, reject)
           } catch (error) {
-            this.reject(error)
+            reject(error)
           }
         })
         failCb && this.failCb.push(() => {
@@ -107,7 +107,7 @@ class MyPromise {
             // reject(x)
             resolvePromise(x, resolve, reject)
           } catch (error) {
-            this.reject(error)
+            reject(error)
           }
         })
       }
@@ -151,20 +151,16 @@ class MyPromise {
 }
 
 function resolvePromise(x, resolve, reject) {
-  try {
-    if (x instanceof MyPromise) {
-      // promise对象的时候，让他执行一下
-      x.then((value) => {
-        resolve(value)
-      }, (reason) => {
-        reject(reason)
-      })
-    } else {
-      // 普通对象
-      resolve(x)
-    }
-  } catch (e) {
-    reject(e)
+  if (x instanceof MyPromise) {
+    // promise对象的时候，让他执行一下
+    x.then((value) => {
+      resolve(value)
+    }, (reason) => {
+      reject(reason)
+    })
+  } else {
+    // 普通对象
+    resolve(x)
   }
 }
 
@@ -255,7 +251,7 @@ let promise = new MyPromise((resolve, reject) => {
 // })
 
 // catch方法
-const p1 = new MyPromise((resolve, reject) => {
+const p3 = new MyPromise((resolve, reject) => {
   // throw 'error'
   reject('error')
 }).then(
@@ -268,27 +264,29 @@ const p1 = new MyPromise((resolve, reject) => {
   console.log('catch: ', e)
 })
 
-console.log('======')
+// Test 顺序
 
-console.log(1)
+// console.log('======')
 
-const p2 = new MyPromise((resolve, reject) => {
-  console.log(2)
-  setTimeout(() => {
-    resolve('p2')
-  }, 1000)
-})
+// console.log(1)
 
-p2.then((value) => {
-  console.log(3, value)
-}, (reason) => {
-  console.log(3, reason)
-})
+// const p2 = new MyPromise((resolve, reject) => {
+//   console.log(2)
+//   setTimeout(() => {
+//     resolve('p2')
+//   }, 1000)
+// })
 
-console.log(4)
+// p2.then((value) => {
+//   console.log(3, value)
+// }, (reason) => {
+//   console.log(3, reason)
+// })
 
-setTimeout(() => {
-  console.log(5)
-}, 500)
+// console.log(4)
 
-// 1 2 4 5 3
+// setTimeout(() => {
+//   console.log(5)
+// }, 500)
+
+// // 1 2 4 5 3
