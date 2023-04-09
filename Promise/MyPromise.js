@@ -70,38 +70,18 @@ class MyPromise {
       // failCb = failCb ? failCb : reason => { reject(reason) }
 
       if (this.state === FULLFILLED) {
-        try {
-          const x = successCb(this.value)
-          // 需要定义一个方法，判断 x 是普通值，还是promise对象，如果是promise对象，需要让他执行一下
-          // resolve(x)
-          resolvePromise(x, resolve, reject)
-        } catch (error) {
-          reject(error)
-        }
-        
-      } else if (this.state === REJECTED) {
-        try {
-          const x = failCb(this.reason)
-          // reject(x)
-          resolvePromise(x, resolve, reject)
-        } catch (error) {
-          reject(error)
-        }
-      } else {
-        // 一般遇到异步的时候，会走到else，也就是当前状态是pending状态，把成功和失败回调暂存起来
-        // this.successCb = successCb
-        // this.failCb = failCb
-
-        successCb && this.successCb.push(() => {
+        pushToMicroTask(() => {
           try {
             const x = successCb(this.value)
+            // 需要定义一个方法，判断 x 是普通值，还是promise对象，如果是promise对象，需要让他执行一下
             // resolve(x)
             resolvePromise(x, resolve, reject)
           } catch (error) {
             reject(error)
           }
         })
-        failCb && this.failCb.push(() => {
+      } else if (this.state === REJECTED) {
+        pushToMicroTask(() => {
           try {
             const x = failCb(this.reason)
             // reject(x)
@@ -109,6 +89,32 @@ class MyPromise {
           } catch (error) {
             reject(error)
           }
+        })
+      } else {
+        // 一般遇到异步的时候，会走到else，也就是当前状态是pending状态，把成功和失败回调暂存起来
+        // this.successCb = successCb
+        // this.failCb = failCb
+        successCb && this.successCb.push(() => {
+          pushToMicroTask(() => {
+            try {
+              const x = successCb(this.value)
+              // resolve(x)
+              resolvePromise(x, resolve, reject)
+            } catch (error) {
+              reject(error)
+            }
+          })
+        })
+        failCb && this.failCb.push(() => {
+          pushToMicroTask(() => {
+            try {
+              const x = failCb(this.reason)
+              // reject(x)
+              resolvePromise(x, resolve, reject)
+            } catch (error) {
+              reject(error)
+            }
+          })
         })
       }
     })
@@ -161,6 +167,28 @@ function resolvePromise(x, resolve, reject) {
   } else {
     // 普通对象
     resolve(x)
+  }
+}
+
+function pushToMicroTask (callback) {
+  if (process && process.nextTick) {
+    // 代表是node环境
+    process.nextTick(callback)
+  } else if (window && document) {
+    // 代表是浏览器环境
+    if (MutationObserver) {
+      // 看看支不支持MutationObserver
+      const div = document.createElement('div')
+      const observer = new MutationObserver(callback)
+      observer.observe(div, {
+        childList: true
+      })
+      div.innerHTML = true
+    } else {
+      setTimeout(callback)
+    }
+  } else {
+    setTimeout(callback)
   }
 }
 
@@ -251,42 +279,44 @@ let promise = new MyPromise((resolve, reject) => {
 // })
 
 // catch方法
-const p3 = new MyPromise((resolve, reject) => {
-  // throw 'error'
-  reject('error')
-}).then(
-  // (value) => {
-  //   console.log('成功的值1：', value)
-  // }, (reason) => {
-  //   console.log('失败1: ', reason)
-  // }
-).catch((e) => {
-  console.log('catch: ', e)
-})
+// const p3 = new MyPromise((resolve, reject) => {
+//   // throw 'error'
+//   reject('error')
+// }).then(
+//   // (value) => {
+//   //   console.log('成功的值1：', value)
+//   // }, (reason) => {
+//   //   console.log('失败1: ', reason)
+//   // }
+// ).catch((e) => {
+//   console.log('catch: ', e)
+// })
 
 // Test 顺序
 
-// console.log('======')
+console.log('======')
 
-// console.log(1)
+console.log(1)
 
-// const p2 = new MyPromise((resolve, reject) => {
-//   console.log(2)
-//   setTimeout(() => {
-//     resolve('p2')
-//   }, 1000)
-// })
+const p2 = new MyPromise((resolve, reject) => {
+  setTimeout(() => {
+    console.log(2)
+    resolve('p2')
+  }, 1000)
+})
 
-// p2.then((value) => {
-//   console.log(3, value)
-// }, (reason) => {
-//   console.log(3, reason)
-// })
+p2.then((value) => {
+  console.log(3, value)
+}, (reason) => {
+  console.log(3, reason)
+})
 
-// console.log(4)
+console.log(4)
 
-// setTimeout(() => {
-//   console.log(5)
-// }, 500)
+setTimeout(() => {
+  console.log(5)
+}, 500)
 
-// // 1 2 4 5 3
+// 1 2 3 4 5
+
+// 正确：1 2 4 3 5
